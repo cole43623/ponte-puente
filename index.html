@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="description" content="Flashcard italiano-spagnolo con ripetizione dilazionata e sincronizzazione via GitHub Gist.">
+<title>ponte · puente — flashcard IT/ES</title>
+<meta name="theme-color" content="#172420" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3efe3" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ponte">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="wordmark">
+      <svg class="bridge-icon" viewBox="0 0 40 24" fill="none"><path d="M2 20 C2 8, 12 2, 20 2 C28 2, 38 8, 38 20" stroke="url(#g1)" stroke-width="2.5" stroke-linecap="round"/><defs><linearGradient id="g1" x1="0" y1="0" x2="40" y2="0"><stop stop-color="#e08d3c"/><stop offset="1" stop-color="#4f95c4"/></linearGradient></defs></svg>
+      <span><span class="it">ponte</span><span class="sep"> · </span><span class="es">puente</span></span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-toggle" id="settingsToggle" aria-label="Impostazioni di sincronizzazione">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V19.6a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.04H4.4a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 6.05 6.94a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10.5a1.7 1.7 0 0 0 1.04-1.56V.6a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V6.5a1.7 1.7 0 0 0 1.56 1.04h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.04Z"/></svg>
+        <span class="sync-dot" id="syncDot"></span>
+      </button>
+      <button class="icon-toggle" id="themeToggle" aria-label="Cambia tema"></button>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <button class="fab" id="fabAdd" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 4l8 7.5M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/></svg>
+      Ripassa
+    </button>
+    <button class="tab-btn" data-tab="library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="12" height="18" rx="2"/><path d="M9 3v18M20 7v11a2 2 0 0 1-2 2h-2"/></svg>
+      Le mie carte
+    </button>
+    <button class="tab-btn" data-tab="stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      Statistiche
+    </button>
+  </nav>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+
+<div class="sheet" id="addSheet">
+  <div class="sheet-handle"></div>
+  <h3>Nuova coppia</h3>
+  <div class="field it">
+    <label class="field-label">Italiano</label>
+    <input type="text" id="newIt" placeholder="es. finestra" autocomplete="off">
+  </div>
+  <div class="field es">
+    <label class="field-label">Spagnolo</label>
+    <input type="text" id="newEs" placeholder="es. ventana" autocomplete="off">
+  </div>
+  <div class="field">
+    <label class="field-label">Nota (opzionale)</label>
+    <textarea id="newNote" placeholder="falso amico, contesto, genere..."></textarea>
+  </div>
+  <div class="field">
+    <label class="field-label">Frase d'esempio (opzionale)</label>
+    <textarea id="newExample" placeholder="es. Ho lasciato la finestra aperta."></textarea>
+  </div>
+  <div class="field">
+    <label class="field-label">Categorie (opzionale, separate da virgola)</label>
+    <input type="text" id="newTags" placeholder="es. cibo, casa, verbi" autocomplete="off">
+  </div>
+  <div class="sheet-actions">
+    <button class="ghost-btn" id="cancelAdd">Annulla</button>
+    <button class="cta" id="saveAdd">Aggiungi carta</button>
+  </div>
+  <button class="ghost-btn bulk-add-link" id="openBulkAdd" type="button">Aggiungi più carte in blocco →</button>
+</div>
+
+<div class="sheet" id="bulkSheet">
+  <div class="sheet-handle"></div>
+  <h3>Aggiungi in blocco</h3>
+  <p class="sheet-intro">Una coppia per riga, nel formato <b>italiano ; spagnolo ; nota (opzionale)</b>.</p>
+  <div class="field">
+    <textarea id="bulkText" class="bulk-textarea" placeholder="finestra ; ventana&#10;grazie ; gracias&#10;burro ; mantequilla ; attenzione ai falsi amici"></textarea>
+  </div>
+  <div class="sheet-actions">
+    <button class="ghost-btn" id="cancelBulk">Annulla</button>
+    <button class="cta" id="saveBulk">Importa carte</button>
+  </div>
+</div>
+
+<div class="sheet" id="settingsSheet">
+  <div class="sheet-handle"></div>
+  <h3>Sincronizzazione (GitHub Gist)</h3>
+  <p class="sheet-intro">Le carte sono sempre salvate in questo browser. Collega un Gist privato per portarle anche su altri dispositivi.</p>
+
+  <div class="field">
+    <label class="field-label">Token GitHub (scope "gist")</label>
+    <input type="password" id="ghToken" placeholder="ghp_..." autocomplete="off">
+  </div>
+  <div class="field">
+    <label class="field-label">ID del Gist (lascia vuoto per crearne uno nuovo)</label>
+    <input type="text" id="ghGistId" placeholder="es. a1b2c3d4e5f6..." autocomplete="off">
+  </div>
+  <a class="token-link" href="https://github.com/settings/tokens/new?scopes=gist&description=Ponte+flashcards" target="_blank" rel="noopener">Crea un token su GitHub →</a>
+
+  <div class="sync-status" id="syncStatusLine">Stato: solo locale, nessun Gist collegato</div>
+  <a class="gist-link" id="gistLink" href="#" target="_blank" rel="noopener" style="display:none;">Apri il Gist su GitHub ↗</a>
+
+  <label class="check-row">
+    <input type="checkbox" id="autoSyncCheck" checked>
+    <span>Sincronizza automaticamente ad ogni modifica</span>
+  </label>
+
+  <div class="sheet-actions">
+    <button class="ghost-btn" id="closeSettings">Chiudi</button>
+    <button class="cta" id="saveSettings">Salva collegamento</button>
+  </div>
+  <div class="sheet-actions secondary" id="syncActionsRow" style="display:none;">
+    <button class="small-btn cancel" id="pullNow">⬇ Scarica ora</button>
+    <button class="small-btn cancel" id="pushNow">⬆ Carica ora</button>
+    <button class="small-btn reset" id="unlinkGist">Scollega</button>
+  </div>
+
+  <h3 class="sheet-sub-h">Preferenze di studio</h3>
+  <label class="check-row">
+    <input type="checkbox" id="ttsCheck" checked>
+    <span>Pronuncia audio automatica al giro della carta</span>
+  </label>
+  <label class="check-row">
+    <input type="checkbox" id="typingModeCheck">
+    <span>Modalità scrittura (digita la risposta invece di girare la carta)</span>
+  </label>
+
+  <h3 class="sheet-sub-h">Backup locale</h3>
+  <p class="sheet-intro">Esporta un file di backup delle tue carte, indipendente dal Gist.</p>
+  <div class="sheet-actions secondary">
+    <button class="small-btn cancel" id="exportBackup">⬇ Esporta JSON</button>
+    <label class="small-btn cancel file-btn" for="importBackupInput">⬆ Importa JSON</label>
+    <input type="file" id="importBackupInput" accept="application/json" style="display:none;">
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{ /* offline support unavailable */ });
+    });
+  }
+</script>
+</body>
+</html>

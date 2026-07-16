@@ -75,7 +75,7 @@
     return {
       cards: seedCards(),
       streak: { count:0, lastDate:null },
-      newToday: { date: todayStr(), count:0 },
+      newToday: { date: todayStr(), count:0, extra:0 },
       history: {} // { 'YYYY-MM-DD': { reviews:0, correct:0 } }
     };
   }
@@ -334,7 +334,9 @@
 
   function ensureDailyReset(){
     if(DATA.newToday.date !== todayStr()){
-      DATA.newToday = { date: todayStr(), count: 0 };
+      DATA.newToday = { date: todayStr(), count: 0, extra: 0 };
+    } else if(typeof DATA.newToday.extra !== 'number'){
+      DATA.newToday.extra = 0;
     }
   }
 
@@ -371,7 +373,7 @@
     });
     due.sort((a,b)=> getSrs(byId[a.cardId],a.dir).due - getSrs(byId[b.cardId],b.dir).due);
     fresh.sort((a,b)=> byId[a.cardId].createdAt - byId[b.cardId].createdAt);
-    const remainingNew = Math.max(0, NEW_DAILY_LIMIT - DATA.newToday.count);
+    const remainingNew = Math.max(0, NEW_DAILY_LIMIT + (DATA.newToday.extra||0) - DATA.newToday.count);
     const freshAllowed = fresh.slice(0, remainingNew);
 
     const queue = [];
@@ -389,6 +391,28 @@
 
   function dueCount(direction, tag){
     return buildQueue(direction, tag).length;
+  }
+
+  function lockedFreshCount(tag){
+    ensureDailyReset();
+    const byId = Object.fromEntries(DATA.cards.map(c=>[c.id,c]));
+    const items = directionItems('mixed', tag);
+    let freshTotal = 0;
+    items.forEach(it=>{
+      const c = byId[it.cardId];
+      const srs = getSrs(c, it.dir);
+      if(srs.reps === 0) freshTotal++;
+    });
+    const remainingNew = Math.max(0, NEW_DAILY_LIMIT + (DATA.newToday.extra||0) - DATA.newToday.count);
+    return Math.max(0, freshTotal - remainingNew);
+  }
+
+  function unlockMoreNew(){
+    ensureDailyReset();
+    DATA.newToday.extra = (DATA.newToday.extra||0) + NEW_DAILY_LIMIT;
+    persist();
+    toast(`+${NEW_DAILY_LIMIT} carte nuove sbloccate per oggi`);
+    renderHome();
   }
 
   /* ============ App state ============ */
@@ -458,6 +482,9 @@
           ${totalDue===0 ? 'Nessuna carta da ripassare ora' : `Inizia il ripasso · ${totalDue} carte`}
         </button>
         <div class="cta-sub">${totalDue===0 ? 'Torna più tardi, oppure aggiungi nuove carte' : directionLabel(studyDirection) + ' · le più urgenti prima'}</div>
+        ${lockedFreshCount(activeTagFilter) > 0 ? `
+          <button class="ghost-btn" id="unlockMoreBtn" style="margin-top:10px;">Sblocca altre ${NEW_DAILY_LIMIT} carte nuove per oggi</button>
+        ` : ''}
       `}
     `;
 
@@ -475,6 +502,8 @@
     });
     const startBtn = $('#startBtn', main);
     if(startBtn) startBtn.addEventListener('click', startSession);
+    const unlockBtn = $('#unlockMoreBtn', main);
+    if(unlockBtn) unlockBtn.addEventListener('click', unlockMoreNew);
 
     $('#fabAdd').style.display = 'none';
   }

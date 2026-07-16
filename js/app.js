@@ -422,7 +422,7 @@
 
   /* ============ App state ============ */
   let activeTab = 'home';
-  let studyDirection = 'mixed';
+  let studyDirection = 'esIt';
   let session = null;
   let libSearch = '';
   let libSort = 'recent';
@@ -524,7 +524,7 @@
   function startSession(){
     const queue = buildQueue(studyDirection, activeTagFilter);
     if(queue.length === 0) return;
-    session = { queue, idx:0, direction: studyDirection, total: queue.length };
+    session = { queue, idx:0, direction: studyDirection, total: queue.length, completedCount: 0 };
     renderStudy();
   }
 
@@ -570,7 +570,7 @@
     const backLang = dir==='itEs' ? 'es' : 'it';
     const frontLabel = frontLang==='it' ? 'ITALIANO' : 'ESPAÑOL';
     const backLabel = backLang==='it' ? 'ITALIANO' : 'ESPAÑOL';
-    const pct = Math.round((session.idx/session.total)*100);
+    const pct = Math.round((session.completedCount/session.total)*100);
 
     if(prefs.typingMode){
       renderStudyTyping({ main, card, dir, front, back, frontLang, backLang, frontLabel, backLabel, pct });
@@ -582,7 +582,7 @@
         <div class="study-progress">
           <button class="exit-btn" id="exitSession">✕ Esci</button>
           <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <span>${session.idx+1}/${session.total}</span>
+          <span>${session.completedCount}/${session.total}</span>
         </div>
 
         <div class="flashcard-stage">
@@ -645,6 +645,7 @@
     studyKeyCleanup = ()=> document.removeEventListener('keydown', onKey);
 
     fc.addEventListener('pointerdown', (e)=>{
+      if(e.target.closest('.audio-btn')) return;
       drag = { startX:e.clientX, startY:e.clientY, dx:0, dy:0, dragging:false, wasFlipped: fc.classList.contains('flipped') };
       try{ fc.setPointerCapture(e.pointerId); }catch(err){}
       fc.style.transition = 'none';
@@ -741,7 +742,7 @@
         <div class="study-progress">
           <button class="exit-btn" id="exitSession">✕ Esci</button>
           <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <span>${session.idx+1}/${session.total}</span>
+          <span>${session.completedCount}/${session.total}</span>
         </div>
 
         <div class="typing-card">
@@ -854,6 +855,8 @@
       const gap = baseGap + jitter;
       const reinsertAt = Math.min(session.queue.length, session.idx + 1 + gap);
       session.queue.splice(reinsertAt, 0, { cardId: card.id, dir, againCount: missedBefore + 1 });
+    } else {
+      session.completedCount += 1;
     }
     session.idx += 1;
     renderStudy();

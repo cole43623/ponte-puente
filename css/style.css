@@ -313,6 +313,9 @@ html[data-theme="light"] nav.tabbar{background: rgba(255,255,255,0.86);}
   touch-action: pan-y;
   will-change: transform;
 }
+.flashcard.flipped{
+  transform: rotateY(180deg);
+}
 .swipe-stamp{
   position:absolute;
   top:20px;
@@ -575,6 +578,7 @@ html[data-theme="light"] nav.tabbar{background: rgba(255,255,255,0.86);}
   opacity:0;
   pointer-events:none;
   transition:opacity .25s ease;
+  cursor:pointer;
 }
 .sheet-backdrop.show{opacity:1; pointer-events:auto;}
 .sheet{
@@ -599,6 +603,7 @@ html[data-theme="light"] nav.tabbar{background: rgba(255,255,255,0.86);}
   background:var(--border-strong);
   border-radius:2px;
   margin:0 auto 18px;
+  touch-action:none;
 }
 .sheet h3{
   font-family:var(--font-display);

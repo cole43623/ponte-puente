@@ -5,9 +5,17 @@ Il formato segue liberamente [Keep a Changelog](https://keepachangelog.com/it/1.
 
 ## [Non rilasciato]
 
+### Aggiunto
+- Gesto "trascina verso il basso" (drag-to-close) per chiudere i pannelli a tendina dal cellulare o desktop, con variazione dinamica dell'opacità dello sfondo oscurato
+
 ### Modificato
 - Le coppie del mazzo di partenza sono state spostate da `js/app.js` a un file dedicato `js/cards.js`, per separare i dati dalla logica
 - Mazzo di partenza ampliato con oltre 130 nuove coppie di livello B2 (lavoro, ambiente, tecnologia, società, politica, media, emozioni, salute, viaggi, relazioni, connettivi, verbi, aggettivi, natura, cibo), con note sui falsi amici più insidiosi
+
+### Corretto
+- Rotazione 3D della carta flashcard al semplice click/tocco diretto (precedentemente bloccato per l'assenza della classe CSS `.flipped` e attivabile solo tramite trascinamento)
+- Blocco o carte doppie durante la transizione rapida dello swipe (ora le interazioni sono temporaneamente bloccate sulla carta in uscita)
+- Focus bloccato sullo sfondo all'apertura delle tendine (ora viene eseguito un blur automatico sugli elementi attivi e il focus si sposta dentro il pannello/settings)
 
 ## [1.1.0] - 2026-07-16
 

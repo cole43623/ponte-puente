@@ -667,6 +667,7 @@
       }
       if(Math.abs(dx) > SWIPE_THRESHOLD){
         const flyDir = dx > 0 ? 1 : -1;
+        fc.style.pointerEvents = 'none';
         fc.style.transition = 'transform .35s ease, opacity .35s ease';
         fc.style.transform = `translateX(${flyDir*620}px) rotate(${flyDir*24}deg) rotateY(180deg)`;
         fc.style.opacity = '0';
@@ -1046,14 +1047,73 @@
 
   /* ============ Add sheet ============ */
   function openSheet(id){
+    if(document.activeElement) document.activeElement.blur();
     $$('.sheet').forEach(s=> s.id !== id && s.classList.remove('show'));
     $('#' + id).classList.add('show');
     $('#sheetBackdrop').classList.add('show');
     $('#sheetBackdrop').dataset.open = id;
   }
   function closeSheets(){
-    $$('.sheet').forEach(s=>s.classList.remove('show'));
-    $('#sheetBackdrop').classList.remove('show');
+    $$('.sheet').forEach(s=>{
+      s.classList.remove('show');
+      s.style.transform = '';
+    });
+    const backdrop = $('#sheetBackdrop');
+    if(backdrop){
+      backdrop.classList.remove('show');
+      backdrop.style.opacity = '';
+    }
+  }
+
+  function setupDragToClose(){
+    $$('.sheet').forEach(sheet=>{
+      let startY = 0;
+      let dragging = false;
+
+      sheet.addEventListener('pointerdown', (e)=>{
+        const isHandle = e.target.closest('.sheet-handle');
+        const isInteractive = e.target.closest('input, textarea, button, a, label');
+        if(!isHandle && (isInteractive || sheet.scrollTop > 0)) return;
+        startY = e.clientY;
+        dragging = true;
+        sheet.style.transition = 'none';
+        const backdrop = $('#sheetBackdrop');
+        if(backdrop) backdrop.style.transition = 'none';
+        try{ sheet.setPointerCapture(e.pointerId); }catch(err){}
+      });
+
+      sheet.addEventListener('pointermove', (e)=>{
+        if(!dragging) return;
+        const dy = e.clientY - startY;
+        if(dy > 0){
+          sheet.style.transform = `translateY(${dy}px)`;
+          const backdrop = $('#sheetBackdrop');
+          if(backdrop) backdrop.style.opacity = Math.max(0, 1 - (dy / 350));
+        } else {
+          sheet.style.transform = `translateY(0px)`;
+          const backdrop = $('#sheetBackdrop');
+          if(backdrop) backdrop.style.opacity = '1';
+        }
+      });
+
+      const endDrag = (e)=>{
+        if(!dragging) return;
+        dragging = false;
+        sheet.style.transition = '';
+        const backdrop = $('#sheetBackdrop');
+        if(backdrop) backdrop.style.transition = '';
+        const dy = e.clientY - startY;
+        if(dy > 120){
+          closeSheets();
+        } else {
+          sheet.style.transform = '';
+          if(backdrop) backdrop.style.opacity = '';
+        }
+      };
+
+      sheet.addEventListener('pointerup', endDrag);
+      sheet.addEventListener('pointercancel', endDrag);
+    });
   }
 
   function openAddSheet(){
@@ -1116,6 +1176,7 @@
     $('#typingModeCheck').checked = !!prefs.typingMode;
     updateSyncStatusLine();
     openSheet('settingsSheet');
+    setTimeout(()=>$('#ghToken').focus(), 300);
   }
 
   /* ============ Backup export/import ============ */
@@ -1254,6 +1315,7 @@
     });
 
     setSyncState(gistConfig.token && gistConfig.gistId ? 'local' : 'local');
+    setupDragToClose();
     renderHome();
 
     if(gistConfig.token && gistConfig.gistId){

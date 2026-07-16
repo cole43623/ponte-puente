@@ -60,22 +60,13 @@
   const NEW_SRS = () => ({ease:2.5, interval:0, reps:0, due:Date.now(), lastReview:null});
 
   function seedCards(){
-    const pairs = [
-      ["ciao","hola",""],
-      ["grazie","gracias",""],
-      ["burro","mantequilla","attenzione: 'burro' in spagnolo significa asino!"],
-      ["asino","burro","falso amico con l'italiano 'burro' (=mantequilla)"],
-      ["macchina","coche",""],
-      ["salire","subir",""],
-      ["guardare","mirar",""],
-      ["settimana","semana",""],
-      ["lavoro","trabajo",""],
-      ["felice","feliz",""],
-      ["stanza","habitación","'stanza' in spagnolo è 'estrofa' (poesia)"],
-      ["subito","enseguida","non confondere con 'subir' (=salire)"]
-    ];
-    return pairs.map(([it,es,note])=>({
-      id: uid(), it, es, note: note||"", example: "", tags: [], createdAt: Date.now(),
+    // Le coppie del mazzo di partenza vivono in js/cards.js (window.PONTE_SEED_PAIRS)
+    // per tenere i dati separati dalla logica dell'app.
+    const pairs = (window.PONTE_SEED_PAIRS && window.PONTE_SEED_PAIRS.length)
+      ? window.PONTE_SEED_PAIRS
+      : [["ciao","hola","",[]]];
+    return pairs.map(([it,es,note,tags])=>({
+      id: uid(), it, es, note: note||"", example: "", tags: Array.isArray(tags) ? tags.slice() : [], createdAt: Date.now(),
       srsItEs: NEW_SRS(), srsEsIt: NEW_SRS()
     }));
   }

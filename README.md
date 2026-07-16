@@ -53,6 +53,7 @@ Il token viene salvato solo in locale (`localStorage`) e usato esclusivamente pe
 ├── css/
 │   └── style.css       stili
 └── js/
+    ├── cards.js         mazzo di partenza (coppie IT/ES seed)
     └── app.js           logica dell'app (dati, SRS, rendering, sincronizzazione)
 ```
 

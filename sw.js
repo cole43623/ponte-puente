@@ -1,8 +1,9 @@
-const CACHE = 'ponte-v2';
+const CACHE = 'ponte-v3';
 const SHELL = [
   './',
   './index.html',
   './css/style.css',
+  './js/cards.js',
   './js/app.js',
   './manifest.json',
   './icon.svg'

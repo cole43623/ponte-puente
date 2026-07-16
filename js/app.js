@@ -342,15 +342,11 @@
   }
 
   /* ============ Queue building ============ */
-  const NEW_DAILY_LIMIT = 15;
-
-  function ensureDailyReset(){
-    if(DATA.newToday.date !== todayStr()){
-      DATA.newToday = { date: todayStr(), count: 0, extra: 0 };
-    } else if(typeof DATA.newToday.extra !== 'number'){
-      DATA.newToday.extra = 0;
-    }
-  }
+  // Niente più blocco giornaliero: si può ripassare tutto il mazzo, all'infinito.
+  // L'ordine è deciso da una priorità (carte mai viste o riviste da più tempo,
+  // e carte con precisione più bassa vengono prima) più un po' di variazione
+  // casuale ad ogni sessione, così l'ordine non è sempre lo stesso.
+  const SESSION_SIZE = 30; // quante carte proporre in una singola sessione di ripasso
 
   function directionItems(direction, tag){
     const items = [];
@@ -364,67 +360,64 @@
 
   function getSrs(card, dir){ return dir==='itEs' ? card.srsItEs : card.srsEsIt; }
 
+  // Una carta è "mai vista in questa direzione" solo se non è mai stata rivista,
+  // non solo se reps===0 (che si azzera anche solo rispondendo "Ripeti"/Again).
+  // Questo evita che le carte appena sbagliate tornino a saltare la fila come
+  // se fossero nuove la volta successiva che si apre il ripasso.
+  function isUnseen(srs){
+    return srs.reps === 0 && !srs.lastReview;
+  }
+
   function allTags(){
     const set = new Set();
     DATA.cards.forEach(c => (c.tags||[]).forEach(t=>set.add(t)));
     return Array.from(set).sort((a,b)=>a.localeCompare(b,'it'));
   }
 
+  // Punteggio di priorità: più alto = più urgente da ripassare.
+  // - carte mai viste: priorità medio-alta, così vengono mescolate tra le altre
+  //   invece di essere tutte ammucchiate all'inizio o bloccate da un tetto giornaliero.
+  // - carte già viste: più tempo è passato dalla scadenza (o più manca ancora),
+  //   e più bassa è la precisione storica, più salgono in cima.
+  // - un po' di rumore casuale evita che l'ordine sia identico ogni volta.
+  function priorityScore(it, byId, now){
+    const c = byId[it.cardId];
+    const srs = getSrs(c, it.dir);
+    const acc = cardAccuracy(c);
+    const weakness = acc === null ? 0.5 : (1 - acc);
+    const overdueDays = isUnseen(srs) ? 1.5 : (now - srs.due) / DAY;
+    const jitter = Math.random() * 1.2 - 0.6;
+    return overdueDays + weakness * 3 + jitter;
+  }
+
   function buildQueue(direction, tag){
-    ensureDailyReset();
     const now = Date.now();
     const byId = Object.fromEntries(DATA.cards.map(c=>[c.id,c]));
     const items = directionItems(direction, tag);
-    const due = [];
-    const fresh = [];
-    items.forEach(it=>{
-      const c = byId[it.cardId];
-      const srs = getSrs(c, it.dir);
-      if(srs.reps === 0) fresh.push(it);
-      else if(srs.due <= now) due.push(it);
-    });
-    due.sort((a,b)=> getSrs(byId[a.cardId],a.dir).due - getSrs(byId[b.cardId],b.dir).due);
-    fresh.sort((a,b)=> byId[a.cardId].createdAt - byId[b.cardId].createdAt);
-    const remainingNew = Math.max(0, NEW_DAILY_LIMIT + (DATA.newToday.extra||0) - DATA.newToday.count);
-    const freshAllowed = fresh.slice(0, remainingNew);
 
-    const queue = [];
-    let fi = 0;
-    due.forEach((it,idx)=>{
-      queue.push(it);
-      if((idx+1) % 4 === 0 && fi < freshAllowed.length){
-        queue.push(freshAllowed[fi++]);
-      }
-    });
-    while(fi < freshAllowed.length) queue.push(freshAllowed[fi++]);
+    const scored = items.map(it => ({ it, score: priorityScore(it, byId, now) }));
+    scored.sort((a,b)=> b.score - a.score);
 
-    return queue.map(it => ({ ...it }));
+    const queue = scored.slice(0, SESSION_SIZE).map(s => ({ ...s.it }));
+    return queue;
   }
 
+  // Quante carte sono "urgenti" adesso (mai viste o scadute): solo indicativo per la home.
   function dueCount(direction, tag){
-    return buildQueue(direction, tag).length;
-  }
-
-  function lockedFreshCount(tag){
-    ensureDailyReset();
+    const now = Date.now();
     const byId = Object.fromEntries(DATA.cards.map(c=>[c.id,c]));
-    const items = directionItems('mixed', tag);
-    let freshTotal = 0;
+    const items = directionItems(direction, tag);
+    let n = 0;
     items.forEach(it=>{
-      const c = byId[it.cardId];
-      const srs = getSrs(c, it.dir);
-      if(srs.reps === 0) freshTotal++;
+      const srs = getSrs(byId[it.cardId], it.dir);
+      if(isUnseen(srs) || srs.due <= now) n++;
     });
-    const remainingNew = Math.max(0, NEW_DAILY_LIMIT + (DATA.newToday.extra||0) - DATA.newToday.count);
-    return Math.max(0, freshTotal - remainingNew);
+    return n;
   }
 
-  function unlockMoreNew(){
-    ensureDailyReset();
-    DATA.newToday.extra = (DATA.newToday.extra||0) + NEW_DAILY_LIMIT;
-    persist();
-    toast(`+${NEW_DAILY_LIMIT} carte nuove sbloccate per oggi`);
-    renderHome();
+  // Quante carte in totale si possono ripassare (nessun blocco, sempre tutto il mazzo).
+  function reviewableCount(direction, tag){
+    return directionItems(direction, tag).length;
   }
 
   /* ============ App state ============ */
@@ -442,6 +435,16 @@
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>`;
   }
 
+  // La home e la schermata di ripasso non hanno mai contenuto che sborda:
+  // bloccarne lo scroll evita quel piccolo "rimbalzo" grafico quando lo swipe
+  // verticale non è preciso (sembra che la pagina scorra anche se non c'è
+  // nulla sopra o sotto). Le altre schede (statistiche, le mie carte) restano
+  // scrollabili normalmente perché il loro contenuto può essere più lungo della schermata.
+  function lockMainScroll(locked){
+    const main = $('#main');
+    if(main) main.classList.toggle('no-scroll', !!locked);
+  }
+
   function renderCurrentTab(){
     if(activeTab === 'home') renderHome();
     else if(activeTab === 'stats') renderStats();
@@ -456,13 +459,15 @@
   function renderHome(){
     if(session) return renderStudy();
 
-    const totalDue = dueCount(studyDirection, activeTagFilter);
+    const reviewable = reviewableCount(studyDirection, activeTagFilter);
+    const urgent = dueCount(studyDirection, activeTagFilter);
     const totalCards = DATA.cards.length;
-    ensureDailyReset();
     const streak = DATA.streak.count;
     const tags = allTags();
+    const sessionSize = Math.min(SESSION_SIZE, reviewable);
 
     const main = $('#main');
+    lockMainScroll(true);
     main.innerHTML = `
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-num due">${dueCount('mixed', activeTagFilter)}</div><div class="stat-label">Da ripassare</div></div>
@@ -491,13 +496,10 @@
           <p>Non hai ancora nessuna carta. Vai su "Le mie carte" e aggiungine una per iniziare.</p>
         </div>
       ` : `
-        <button class="cta" id="startBtn" ${totalDue===0 ? 'disabled' : ''}>
-          ${totalDue===0 ? 'Nessuna carta da ripassare ora' : `Inizia il ripasso · ${totalDue} carte`}
+        <button class="cta" id="startBtn" ${reviewable===0 ? 'disabled' : ''}>
+          ${reviewable===0 ? 'Nessuna carta da ripassare in questa categoria' : `Inizia il ripasso · ${sessionSize} carte`}
         </button>
-        <div class="cta-sub">${totalDue===0 ? 'Torna più tardi, oppure aggiungi nuove carte' : directionLabel(studyDirection) + ' · le più urgenti prima'}</div>
-        ${lockedFreshCount(activeTagFilter) > 0 ? `
-          <button class="ghost-btn" id="unlockMoreBtn" style="margin-top:10px;">Sblocca altre ${NEW_DAILY_LIMIT} carte nuove per oggi</button>
-        ` : ''}
+        <div class="cta-sub">${reviewable===0 ? "Prova un'altra categoria o direzione" : directionLabel(studyDirection) + (urgent>0 ? ` · ${urgent} da recuperare` : ' · si può ripassare senza limiti')}</div>
       `}
     `;
 
@@ -515,8 +517,6 @@
     });
     const startBtn = $('#startBtn', main);
     if(startBtn) startBtn.addEventListener('click', startSession);
-    const unlockBtn = $('#unlockMoreBtn', main);
-    if(unlockBtn) unlockBtn.addEventListener('click', unlockMoreNew);
 
     $('#fabAdd').style.display = 'none';
   }
@@ -538,6 +538,7 @@
     if(studyKeyCleanup){ studyKeyCleanup(); studyKeyCleanup = null; }
     const main = $('#main');
     $('#fabAdd').style.display = 'none';
+    lockMainScroll(true);
 
     if(!session || session.idx >= session.queue.length){
       const wasSession = !!session;
@@ -644,7 +645,7 @@
     studyKeyCleanup = ()=> document.removeEventListener('keydown', onKey);
 
     fc.addEventListener('pointerdown', (e)=>{
-      drag = { startX:e.clientX, startY:e.clientY, dx:0, dragging:false, wasFlipped: fc.classList.contains('flipped') };
+      drag = { startX:e.clientX, startY:e.clientY, dx:0, dy:0, dragging:false, wasFlipped: fc.classList.contains('flipped') };
       try{ fc.setPointerCapture(e.pointerId); }catch(err){}
       fc.style.transition = 'none';
     });
@@ -656,6 +657,7 @@
       if(!drag.dragging && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
       drag.dragging = true;
       drag.dx = dx;
+      drag.dy = dy;
       if(!drag.wasFlipped) return;
       fc.style.transform = `translateX(${dx}px) rotate(${dx*0.05}deg) rotateY(180deg)`;
       stampGood.style.opacity = Math.max(0, Math.min(1, dx/100));
@@ -665,12 +667,18 @@
     function endDrag(){
       if(!drag) return;
       fc.style.transition = '';
-      const { dragging, dx, wasFlipped } = drag;
+      const { dx, dy, wasFlipped } = drag;
+      const moved = Math.hypot(dx, dy||0);
       drag = null;
       stampGood.style.opacity = 0;
       stampBad.style.opacity = 0;
 
-      if(!dragging){
+      // Un piccolo movimento involontario del dito (molto comune su schermi
+      // touch) non deve impedire il "tap per girare": lo trattiamo come un
+      // tocco vero e proprio finché non supera una soglia ragionevole.
+      const TAP_TOLERANCE = 20;
+      if(moved < TAP_TOLERANCE){
+        fc.style.transform = wasFlipped ? 'rotateY(180deg)' : '';
         setFlipped(!wasFlipped);
         return;
       }
@@ -816,13 +824,8 @@
   }
 
   function rateCard(card, dir, rating){
-    const wasNew = getSrs(card,dir).reps === 0;
     const newSrs = schedule(getSrs(card,dir), rating);
     if(dir==='itEs') card.srsItEs = newSrs; else card.srsEsIt = newSrs;
-    if(wasNew){
-      ensureDailyReset();
-      DATA.newToday.count += 1;
-    }
     logReview(rating);
 
     if(!card.stats) card.stats = NEW_CARD_STATS();
@@ -868,6 +871,7 @@
   /* ============ Rendering: STATS ============ */
   function renderStats(){
     $('#fabAdd').style.display = 'none';
+    lockMainScroll(false);
     const main = $('#main');
     const hist = DATA.history || {};
 
@@ -974,6 +978,7 @@
   function renderLibrary(){
     const main = $('#main');
     $('#fabAdd').style.display = 'flex';
+    lockMainScroll(false);
 
     const q = libSearch.trim().toLowerCase();
     const tags = allTags();
@@ -1176,6 +1181,39 @@
   }
 
   /* ============ Add sheet ============ */
+  // La pagina sotto (sfocata) non deve poter scorrere o muoversi mentre una
+  // tendina è aperta: blocchiamo la posizione dello scroll e ignoriamo i tocchi
+  // che non partono dalla tendina stessa, così trascinare la tendina in basso
+  // non fa "scappare" lo sfondo.
+  let bodyScrollLocked = false;
+  let savedScrollY = 0;
+
+  function blockBackgroundTouch(e){
+    if(!e.target.closest('.sheet')) e.preventDefault();
+  }
+
+  function lockBodyScroll(){
+    if(bodyScrollLocked) return;
+    bodyScrollLocked = true;
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.addEventListener('touchmove', blockBackgroundTouch, { passive:false });
+  }
+
+  function unlockBodyScroll(){
+    if(!bodyScrollLocked) return;
+    bodyScrollLocked = false;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    window.scrollTo(0, savedScrollY);
+    document.removeEventListener('touchmove', blockBackgroundTouch);
+  }
+
   function openSheet(id){
     if(document.activeElement) document.activeElement.blur();
     $$('.sheet').forEach(s=> s.id !== id && s.classList.remove('show'));
@@ -1183,6 +1221,7 @@
     $('#sheetBackdrop').classList.add('show');
     $('#sheetBackdrop').dataset.open = id;
     document.body.classList.add('sheet-open');
+    lockBodyScroll();
   }
   function closeSheets(){
     $$('.sheet').forEach(s=>{
@@ -1195,6 +1234,7 @@
       backdrop.style.opacity = '';
     }
     document.body.classList.remove('sheet-open');
+    unlockBodyScroll();
   }
 
   function setupDragToClose(){

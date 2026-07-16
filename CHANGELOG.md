@@ -15,13 +15,17 @@ Il formato segue liberamente [Keep a Changelog](https://keepachangelog.com/it/1.
 - Le coppie del mazzo di partenza sono state spostate da `js/app.js` a un file dedicato `js/cards.js`, per separare i dati dalla logica
 - Mazzo di partenza ampliato con oltre 130 nuove coppie di livello B2 (lavoro, ambiente, tecnologia, società, politica, media, emozioni, salute, viaggi, relazioni, connettivi, verbi, aggettivi, natura, cibo), con note sui falsi amici più insidiosi
 - Il tasto di pronuncia audio nella libreria riproduce ora lo spagnolo invece dell'italiano
+- Rimosso il limite giornaliero di carte nuove: ora si può ripassare l'intero mazzo, in qualsiasi direzione, senza alcun blocco. L'ordine delle carte proposte privilegia quelle mai viste, quelle non ripassate da più tempo e quelle con precisione più bassa, con una variazione casuale ad ogni sessione per non mostrare sempre la stessa sequenza
 
 ### Corretto
 - Rotazione 3D della carta flashcard al semplice click/tocco diretto (precedentemente bloccato per l'assenza della classe CSS `.flipped` e attivabile solo tramite trascinamento)
+- La carta non si girava più tramite tocco se il dito si muoveva anche solo di pochi pixel durante il tap (capitava spesso su schermi touch); ora un piccolo movimento involontario viene ancora riconosciuto come un tocco valido
 - Blocco o carte doppie durante la transizione rapida dello swipe (ora le interazioni sono temporaneamente bloccate sulla carta in uscita)
 - Focus bloccato sullo sfondo all'apertura delle tendine (ora viene eseguito un blur automatico sugli elementi attivi e il focus si sposta dentro il pannello/settings)
-- Le tendine non si chiudevano trascinandole verso il basso perché il gesto veniva "rubato" dallo scroll dello sfondo sottostante; ora lo sfondo resta bloccato e non interagibile finché la tendina è aperta
+- Le tendine non si chiudevano trascinandole verso il basso perché il gesto veniva "rubato" dallo scroll dello sfondo sottostante; il blocco dello sfondo è stato ora reso più solido (la pagina viene "congelata" nella posizione corrente e ogni tocco che non parte dalla tendina viene ignorato), così il trascinamento funziona in modo affidabile anche su mobile
 - Durante il ripasso, sbagliare 2-3 carte di fila poteva creare un ciclo infinito in cui venivano riproposte solo quelle carte, escludendo il resto del mazzo; ora la riproposta viene distanziata in modo variabile e crescente ad ogni errore ripetuto
+- Rispondere "Ripeti" a una carta ne azzerava il contatore di ripetizioni, facendola riclassificare come carta "mai vista" invece che "già rivista": uscendo e rientrando nell'app, le carte appena sbagliate ripartivano da capo saltando la spaziatura prevista, invece di rispettare i tempi di riproposta
+- La home e la schermata di ripasso "scorrevano" con un fastidioso rimbalzo grafico quando lo swipe verticale non era preciso, pur non avendo contenuto che sborda dallo schermo; ora restano ferme e inerti allo scroll verticale, mentre le schede Statistiche e Le mie carte restano scrollabili normalmente
 
 ## [1.1.0] - 2026-07-16
 

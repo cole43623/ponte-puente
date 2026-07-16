@@ -122,6 +122,15 @@ main{
   flex:1;
   padding: 0 20px calc(100px + var(--safe-bottom));
   overflow-y:auto;
+  overscroll-behavior:contain;
+}
+/* Usata sulla home e sulla schermata di ripasso: non hanno mai contenuto che
+   sborda, quindi blocchiamo lo scroll per evitare il rimbalzo grafico quando
+   uno swipe verticale impreciso dà l'impressione che la pagina scorra. */
+main.no-scroll{
+  overflow:hidden;
+  overscroll-behavior:none;
+  touch-action:pan-x;
 }
 
 /* ---------- Tab bar ---------- */

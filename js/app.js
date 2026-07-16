@@ -58,6 +58,13 @@
 
   /* ============ Data model ============ */
   const NEW_SRS = () => ({ease:2.5, interval:0, reps:0, due:Date.now(), lastReview:null});
+  const NEW_CARD_STATS = () => ({reviews:0, correct:0, again:0, lastReview:null});
+
+  function cardAccuracy(card){
+    const s = card.stats;
+    if(!s || !s.reviews) return null;
+    return s.correct / s.reviews;
+  }
 
   function seedCards(){
     // Le coppie del mazzo di partenza vivono in js/cards.js (window.PONTE_SEED_PAIRS)
@@ -67,7 +74,7 @@
       : [["ciao","hola","",[]]];
     return pairs.map(([it,es,note,tags])=>({
       id: uid(), it, es, note: note||"", example: "", tags: Array.isArray(tags) ? tags.slice() : [], createdAt: Date.now(),
-      srsItEs: NEW_SRS(), srsEsIt: NEW_SRS()
+      srsItEs: NEW_SRS(), srsEsIt: NEW_SRS(), stats: NEW_CARD_STATS()
     }));
   }
 
@@ -83,6 +90,11 @@
   function ensureCardShape(c){
     if(!Array.isArray(c.tags)) c.tags = [];
     if(typeof c.example !== 'string') c.example = '';
+    if(!c.stats || typeof c.stats !== 'object') c.stats = NEW_CARD_STATS();
+    if(typeof c.stats.reviews !== 'number') c.stats.reviews = 0;
+    if(typeof c.stats.correct !== 'number') c.stats.correct = 0;
+    if(typeof c.stats.again !== 'number') c.stats.again = 0;
+    if(typeof c.stats.lastReview === 'undefined') c.stats.lastReview = null;
     return c;
   }
 
@@ -420,6 +432,7 @@
   let studyDirection = 'mixed';
   let session = null;
   let libSearch = '';
+  let libSort = 'recent';
   let expandedCardId = null;
   let activeTagFilter = '';
   let libTagFilter = '';
@@ -811,11 +824,28 @@
       DATA.newToday.count += 1;
     }
     logReview(rating);
+
+    if(!card.stats) card.stats = NEW_CARD_STATS();
+    card.stats.reviews += 1;
+    if(rating >= 2) card.stats.correct += 1;
+    else card.stats.again += 1;
+    card.stats.lastReview = Date.now();
+
     persist();
 
     if(rating === 0){
-      const reinsertAt = Math.min(session.queue.length, session.idx + 3);
-      session.queue.splice(reinsertAt, 0, { cardId: card.id, dir });
+      const item = currentSessionItem();
+      // Space out the repeat instead of a fixed offset: a fixed gap creates an
+      // exact cycle when a handful of cards keep failing together (e.g. always
+      // "+3" traps 3 struggling cards in a loop, starving the rest of the deck).
+      // Grow the gap each time this item is missed again, and add jitter so
+      // several failing cards don't stay locked to the same rotation.
+      const missedBefore = (item && item.againCount) || 0;
+      const baseGap = 6 + missedBefore * 4;
+      const jitter = Math.floor(Math.random() * 6);
+      const gap = baseGap + jitter;
+      const reinsertAt = Math.min(session.queue.length, session.idx + 1 + gap);
+      session.queue.splice(reinsertAt, 0, { cardId: card.id, dir, againCount: missedBefore + 1 });
     }
     session.idx += 1;
     renderStudy();
@@ -859,6 +889,13 @@
     const learning = DATA.cards.filter(c => (c.srsItEs.reps>0 || c.srsEsIt.reps>0) && !(c.srsItEs.interval >= MASTER_DAYS && c.srsEsIt.interval >= MASTER_DAYS)).length;
     const untouched = DATA.cards.length - mastered - learning;
 
+    const tagStats = computeTagStats();
+    const hardest = DATA.cards
+      .filter(c => c.stats && c.stats.reviews >= 3)
+      .map(c => ({ c, acc: c.stats.correct / c.stats.reviews }))
+      .sort((a,b)=> a.acc - b.acc)
+      .slice(0, 6);
+
     main.innerHTML = `
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-num" style="color:var(--good)">${accuracy}%</div><div class="stat-label">Precisione totale</div></div>
@@ -887,7 +924,50 @@
         <span><i class="dot learning"></i>In apprendimento · ${learning}</span>
         <span><i class="dot untouched"></i>Non iniziate · ${untouched}</span>
       </div>
+
+      ${tagStats.length ? `
+        <div class="section-label">Precisione per categoria</div>
+        <div class="tag-stats-list">
+          ${tagStats.map(t=>`
+            <div class="tag-stats-row">
+              <div class="tag-stats-head">
+                <span class="tag-stats-name">${escapeHtml(t.tag)}</span>
+                <span class="tag-stats-num">${t.reviews ? t.accuracy+'%' : 'nessun ripasso'} · ${t.cards} cart${t.cards===1?'a':'e'}</span>
+              </div>
+              <div class="tag-stats-bar"><div class="tag-stats-fill" style="width:${t.reviews ? t.accuracy : 0}%"></div></div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      ${hardest.length ? `
+        <div class="section-label">Le carte più difficili</div>
+        <div class="hardest-list">
+          ${hardest.map(({c,acc})=>`
+            <div class="hardest-row">
+              <div class="hardest-words"><span class="it">${escapeHtml(c.it)}</span><span class="arrow">⇄</span><span class="es">${escapeHtml(c.es)}</span></div>
+              <span class="hardest-acc">${Math.round(acc*100)}%</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
     `;
+  }
+
+  function computeTagStats(){
+    const map = {};
+    DATA.cards.forEach(c=>{
+      const s = c.stats || NEW_CARD_STATS();
+      (c.tags||[]).forEach(tag=>{
+        if(!map[tag]) map[tag] = { tag, reviews:0, correct:0, cards:0 };
+        map[tag].reviews += s.reviews;
+        map[tag].correct += s.correct;
+        map[tag].cards += 1;
+      });
+    });
+    return Object.values(map)
+      .map(t => ({ ...t, accuracy: t.reviews ? Math.round((t.correct/t.reviews)*100) : 0 }))
+      .sort((a,b)=> b.reviews - a.reviews);
   }
 
   /* ============ Rendering: LIBRARY ============ */
@@ -900,11 +980,28 @@
     const cards = DATA.cards
       .filter(c => !q || c.it.toLowerCase().includes(q) || c.es.toLowerCase().includes(q) || (c.note||'').toLowerCase().includes(q) || (c.example||'').toLowerCase().includes(q) || (c.tags||[]).some(t=>t.toLowerCase().includes(q)))
       .filter(c => !libTagFilter || (c.tags||[]).includes(libTagFilter))
-      .sort((a,b)=> b.createdAt - a.createdAt);
+      .sort((a,b)=>{
+        if(libSort === 'accuracy_asc' || libSort === 'accuracy_desc'){
+          const aa = cardAccuracy(a), ab = cardAccuracy(b);
+          if(aa===null && ab===null) return b.createdAt - a.createdAt;
+          if(aa===null) return 1; // cards never reviewed sink to the bottom
+          if(ab===null) return -1;
+          return libSort === 'accuracy_asc' ? aa-ab : ab-aa;
+        }
+        return b.createdAt - a.createdAt;
+      });
 
     main.innerHTML = `
       <div class="search-row">
         <input type="text" class="search-input" id="searchInput" placeholder="Cerca una parola..." value="${escapeAttr(libSearch)}">
+      </div>
+      <div class="sort-row">
+        <label class="sort-label" for="librarySort">Ordina per</label>
+        <select class="sort-select" id="librarySort">
+          <option value="recent" ${libSort==='recent'?'selected':''}>Più recenti</option>
+          <option value="accuracy_asc" ${libSort==='accuracy_asc'?'selected':''}>Precisione: dalle più difficili</option>
+          <option value="accuracy_desc" ${libSort==='accuracy_desc'?'selected':''}>Precisione: dalle più consolidate</option>
+        </select>
       </div>
       ${tags.length ? `
         <div class="tag-chips" id="libTagChips">
@@ -933,6 +1030,10 @@
       inp.focus();
       inp.setSelectionRange(pos,pos);
     });
+    $('#librarySort').addEventListener('change', (e)=>{
+      libSort = e.target.value;
+      renderLibrary();
+    });
     $$('.tag-chip', main).forEach(btn=>{
       btn.addEventListener('click', ()=>{
         libTagFilter = btn.dataset.tag;
@@ -944,6 +1045,32 @@
   function srsSummary(srs){
     if(srs.reps === 0) return 'nuova';
     return `${fmtInterval(srs.interval)}`;
+  }
+
+  function cardStatsSummary(card){
+    const s = card.stats;
+    if(!s || !s.reviews) return 'Precisione: nessun ripasso ancora';
+    const acc = Math.round((s.correct/s.reviews)*100);
+    return `Precisione <b>${acc}%</b> · ${s.reviews} ripass${s.reviews===1?'o':'i'}`;
+  }
+
+  function cardDetailStats(card){
+    const s = card.stats || NEW_CARD_STATS();
+    const acc = s.reviews ? Math.round((s.correct/s.reviews)*100) : null;
+    const last = s.lastReview ? new Date(s.lastReview).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}) : 'mai';
+    return `
+      <div class="section-label" style="margin-top:0;">Statistiche di questa carta</div>
+      <div class="card-detail-grid">
+        <div class="card-detail-cell"><div class="card-detail-num">${acc===null?'—':acc+'%'}</div><div class="card-detail-label">Precisione</div></div>
+        <div class="card-detail-cell"><div class="card-detail-num">${s.reviews}</div><div class="card-detail-label">Ripassi totali</div></div>
+        <div class="card-detail-cell"><div class="card-detail-num">${s.again}</div><div class="card-detail-label">Volte sbagliata</div></div>
+      </div>
+      <div class="card-detail-row">
+        <span>IT→ES: <b>${srsSummary(card.srsItEs)}</b> (${card.srsItEs.reps} ripassi)</span>
+        <span>ES→IT: <b>${srsSummary(card.srsEsIt)}</b> (${card.srsEsIt.reps} ripassi)</span>
+      </div>
+      <div class="card-detail-row"><span>Ultimo ripasso: ${last}</span></div>
+    `;
   }
 
   function renderCardRow(card){
@@ -962,7 +1089,7 @@
           ${(card.tags&&card.tags.length) ? `<div class="card-row-tags">${card.tags.map(t=>`<span class="mini-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
         </div>
         <div class="card-row-actions">
-          <button class="icon-btn audio-btn-sm" title="Ascolta italiano" data-lang="it" data-text="${escapeAttr(card.it)}">${audioIconSvg()}</button>
+          <button class="icon-btn audio-btn-sm" title="Ascolta spagnolo" data-lang="es" data-text="${escapeAttr(card.es)}">${audioIconSvg()}</button>
           <button class="icon-btn edit-toggle" title="Modifica">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
           </button>
@@ -974,8 +1101,10 @@
       <div class="srs-meta">
         <span>IT→ES <b>${srsSummary(card.srsItEs)}</b></span>
         <span>ES→IT <b>${srsSummary(card.srsEsIt)}</b></span>
+        <span>${cardStatsSummary(card)}</span>
       </div>
       <div class="edit-form ${expanded?'show':''}">
+        ${expanded ? `<div class="card-detail-stats">${cardDetailStats(card)}</div>` : ''}
         <div class="edit-form-row">
           <input type="text" class="edit-it" value="${escapeAttr(card.it)}" placeholder="Italiano">
           <input type="text" class="edit-es" value="${escapeAttr(card.es)}" placeholder="Spagnolo">
@@ -993,7 +1122,7 @@
 
     row.querySelector('.audio-btn-sm').addEventListener('click', (e)=>{
       e.stopPropagation();
-      speak(card.it, 'it');
+      speak(card.es, 'es');
     });
 
     row.querySelector('.edit-toggle').addEventListener('click', ()=>{
@@ -1020,6 +1149,7 @@
     row.querySelector('.reset-progress').addEventListener('click', ()=>{
       card.srsItEs = NEW_SRS();
       card.srsEsIt = NEW_SRS();
+      card.stats = NEW_CARD_STATS();
       persist();
       toast('Progressi azzerati');
       renderLibrary();
@@ -1052,6 +1182,7 @@
     $('#' + id).classList.add('show');
     $('#sheetBackdrop').classList.add('show');
     $('#sheetBackdrop').dataset.open = id;
+    document.body.classList.add('sheet-open');
   }
   function closeSheets(){
     $$('.sheet').forEach(s=>{
@@ -1063,6 +1194,7 @@
       backdrop.classList.remove('show');
       backdrop.style.opacity = '';
     }
+    document.body.classList.remove('sheet-open');
   }
 
   function setupDragToClose(){
@@ -1077,6 +1209,7 @@
         startY = e.clientY;
         dragging = true;
         sheet.style.transition = 'none';
+        sheet.style.touchAction = 'none';
         const backdrop = $('#sheetBackdrop');
         if(backdrop) backdrop.style.transition = 'none';
         try{ sheet.setPointerCapture(e.pointerId); }catch(err){}
@@ -1084,6 +1217,7 @@
 
       sheet.addEventListener('pointermove', (e)=>{
         if(!dragging) return;
+        e.preventDefault();
         const dy = e.clientY - startY;
         if(dy > 0){
           sheet.style.transform = `translateY(${dy}px)`;
@@ -1094,12 +1228,13 @@
           const backdrop = $('#sheetBackdrop');
           if(backdrop) backdrop.style.opacity = '1';
         }
-      });
+      }, { passive:false });
 
       const endDrag = (e)=>{
         if(!dragging) return;
         dragging = false;
         sheet.style.transition = '';
+        sheet.style.touchAction = '';
         const backdrop = $('#sheetBackdrop');
         if(backdrop) backdrop.style.transition = '';
         const dy = e.clientY - startY;
@@ -1131,7 +1266,7 @@
     if(!it || !es){ toast('Inserisci entrambe le parole'); return; }
     DATA.cards.push({
       id: uid(), it, es, note, example, tags, createdAt: Date.now(),
-      srsItEs: NEW_SRS(), srsEsIt: NEW_SRS()
+      srsItEs: NEW_SRS(), srsEsIt: NEW_SRS(), stats: NEW_CARD_STATS()
     });
     persist();
     closeSheets();
@@ -1156,7 +1291,7 @@
       const [it, es, note] = parts;
       DATA.cards.push({
         id: uid(), it, es, note: note||'', example:'', tags: [], createdAt: Date.now(),
-        srsItEs: NEW_SRS(), srsEsIt: NEW_SRS()
+        srsItEs: NEW_SRS(), srsEsIt: NEW_SRS(), stats: NEW_CARD_STATS()
       });
       added++;
     });

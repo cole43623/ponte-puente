@@ -678,7 +678,12 @@
       // tocco vero e proprio finché non supera una soglia ragionevole.
       const TAP_TOLERANCE = 20;
       if(moved < TAP_TOLERANCE){
-        fc.style.transform = wasFlipped ? 'rotateY(180deg)' : '';
+        // Importante: NON forzare qui uno stile inline di rotazione. Impostare
+        // "rotateY(180deg)" a mano aveva priorità sulla classe CSS .flipped e
+        // restava attaccato alla carta anche dopo averla tolta, impedendo il
+        // ritorno visivo al lato originale al secondo tocco. Lasciamo che sia
+        // solo la classe .flipped a controllare la rotazione in entrambi i versi.
+        fc.style.transform = '';
         setFlipped(!wasFlipped);
         return;
       }

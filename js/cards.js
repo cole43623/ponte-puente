@@ -208,7 +208,17 @@
     ["assaggiare","probar","",["cibo","verbi"]],
     ["pentola","olla","",["cibo"]],
     ["padella","sartén","",["cibo"]],
-    ["ingrediente","ingrediente","",["cibo"]]
+    ["ingrediente","ingrediente","",["cibo"]],
+
+    // ---------- Casa ----------
+    ["soppalco","altillo","",["casa"]],
+    ["candeggina","lejía","in America Latina si usa più spesso 'cloro' per indicare la candeggina",["casa","falsi amici"]],
+
+    // ---------- Musica ----------
+    ["ritornello","estribillo","",["musica"]],
+
+    // ---------- Società e politica ----------
+    ["ostaggi","rehén","in spagnolo è singolare ('el rehén'/'los rehenes'), non un plurale invariabile come in italiano",["società","politica"]]
   ];
 
   window.PONTE_SEED_PAIRS = pairs;
